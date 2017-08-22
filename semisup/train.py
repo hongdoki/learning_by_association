@@ -32,6 +32,7 @@ import tensorflow.contrib.slim as slim
 from tensorflow.python.platform import app
 from tensorflow.python.platform import flags
 from tensorflow.python.training import saver as tf_saver
+from tensorflow.contrib.slim.python.slim.learning import train_step
 
 FLAGS = flags.FLAGS
 
@@ -388,16 +389,27 @@ def main(argv):
                 accuracy_validation = slim.metrics.accuracy(tf.to_int32(predictions_val),
                                                             tf.to_int32(target_labels_val))
                 tf.summary.scalar('Accuracy_Validation', accuracy_validation)
-
                 if num_labels == 2:
-                    auc_validation = slim.metrics.streaming_auc(tf.sigmoid(logit_val),
+                    auc_validation = slim.metrics.streaming_auc(tf.nn.softmax(logit_val)[:, 1],
                                                                 tf.to_int32(target_labels_val))
-                    tf.summary.scalar('AUC_Validation', auc_validation)
+                    tf.summary.scalar('AUC_Validation', auc_validation[0])
 
+            # # for debugging
+            # def train_step_fn(session, *args, **kwargs):
+            #     total_loss, should_stop = train_step(session, *args, **kwargs)
+            #
+            #     if train_step_fn.step % 1000 == 0:
+            #         # fill this
+            #
+            #     train_step_fn.step += 1
+            #     return [total_loss, should_stop]
+            #
+            # train_step_fn.step = 0
 
             # runs a training loop
             slim.learning.train(
                 train_op,
+                # train_step_fn=train_step_fn,
                 logdir=FLAGS.logdir + '/train',
                 save_summaries_secs=FLAGS.save_summaries_secs,
                 save_interval_secs=FLAGS.save_interval_secs,
