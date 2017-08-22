@@ -18,6 +18,9 @@ def get_data(name):
   if name == 'train' or name == 'unlabeled':
     return np.load(os.path.join(DATADIR, 'target_mnist_X_train.npy')), \
            np.argmax(np.load(os.path.join(DATADIR, 'target_mnist_y_train.npy')), axis=1)
+  elif name == 'validation':
+    return np.load(os.path.join(DATADIR, 'target_mnist_X_val.npy')), \
+           np.argmax(np.load(os.path.join(DATADIR, 'target_mnist_y_val.npy')), axis=1)
   elif name == 'test':
     return np.load(os.path.join(DATADIR, 'target_mnist_X_test.npy')), \
            np.argmax(np.load(os.path.join(DATADIR, 'target_mnist_y_test.npy')), axis=1)
