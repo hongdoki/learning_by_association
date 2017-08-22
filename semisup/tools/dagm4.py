@@ -18,7 +18,9 @@ def get_data(name):
   if name == 'train' or name == 'unlabeled':
     return np.expand_dims(np.load(os.path.join(DATADIR, 'target_d4_X_train.npy')), axis=-1), \
            np.argmax(np.load(os.path.join(DATADIR, 'target_d4_y_train.npy')), axis=1)
-  # custom svhn has only training/validation set
+  elif name == 'validation':
+    return np.expand_dims(np.load(os.path.join(DATADIR, 'target_d4_X_val.npy')), axis=-1), \
+           np.argmax(np.load(os.path.join(DATADIR, 'target_d4_y_val.npy')), axis=1)
   elif name == 'test':
     return np.expand_dims(np.load(os.path.join(DATADIR, 'target_d4_X_test.npy')), axis=-1), \
            np.argmax(np.load(os.path.join(DATADIR, 'target_d4_y_test.npy')), axis=1)
