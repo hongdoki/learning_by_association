@@ -46,7 +46,7 @@ flags.DEFINE_string('target_dataset_split', 'unlabeled',
                     'adaptation.')
 
 flags.DEFINE_string('architecture', 'svhn_model', 'Which network architecture '
-                    'from architectures.py to use.')
+                                                  'from architectures.py to use.')
 
 flags.DEFINE_integer('sup_per_class', 100,
                      'Number of labeled samples used per class in total.'
@@ -196,8 +196,18 @@ def apply_envelope(type, step, final_weight, growing_steps, delay):
     return tf.clip_by_value(value, 0., final_weight)
 
 
+def insert_hyper_params_into_tinydb(flags_t):
+    from tinydb import TinyDB
+    from tools.data_dirs import tinydb_path
+    db = TinyDB(tinydb_path)
+    table = db.table('lba-hyper-params')
+    table.insert(flags_t.__flags)
+
+
 def main(argv):
     del argv
+    # store experiment information
+    insert_hyper_params_into_tinydb(FLAGS)
 
     # Load data.
     dataset_tools = import_module('tools.' + FLAGS.dataset)
@@ -206,6 +216,11 @@ def main(argv):
         target_dataset_tools = import_module('tools.' + FLAGS.target_dataset)
         train_images_unlabeled, _ = target_dataset_tools.get_data(
             FLAGS.target_dataset_split)
+        target_val_data = target_dataset_tools.get_data('validation')
+        if target_val_data:
+            target_images_val, target_labels_val = target_val_data
+        else:
+            print('Warning: target data has no validation set.')
     else:
         train_images_unlabeled, _ = dataset_tools.get_data('unlabeled')
 
@@ -320,17 +335,17 @@ def main(argv):
                 if FLAGS.visit_weight_envelope_delay == -1
                 else FLAGS.visit_weight_envelope_delay)
             visit_weight = apply_envelope(
-                            type=FLAGS.visit_weight_envelope,
-                            step=model.step,
-                            final_weight=FLAGS.visit_weight,
-                            growing_steps=visit_weight_envelope_steps,
-                            delay=visit_weight_envelope_delay)
+                type=FLAGS.visit_weight_envelope,
+                step=model.step,
+                final_weight=FLAGS.visit_weight,
+                growing_steps=visit_weight_envelope_steps,
+                delay=visit_weight_envelope_delay)
             walker_weight = apply_envelope(
-                                type=FLAGS.walker_weight_envelope,
-                                step=model.step,
-                                final_weight=FLAGS.walker_weight,
-                                growing_steps=FLAGS.walker_weight_envelope_steps,  # pylint:disable=line-too-long
-                                delay=FLAGS.walker_weight_envelope_delay)
+                type=FLAGS.walker_weight_envelope,
+                step=model.step,
+                final_weight=FLAGS.walker_weight,
+                growing_steps=FLAGS.walker_weight_envelope_steps,  # pylint:disable=line-too-long
+                delay=FLAGS.walker_weight_envelope_delay)
             tf.summary.scalar('Weights_Visit', visit_weight)
             tf.summary.scalar('Weights_Walker', walker_weight)
 
@@ -365,6 +380,22 @@ def main(argv):
             saver = tf_saver.Saver(max_to_keep=FLAGS.max_checkpoints,
                                    keep_checkpoint_every_n_hours=FLAGS.keep_checkpoint_every_n_hours)  # pylint:disable=line-too-long
 
+            # for validation
+            if target_val_data:
+                logit_val = model.embedding_to_logit(model.image_to_embedding(target_images_val))
+                predictions_val = tf.argmax(logit_val, 1)
+
+                accuracy_validation = slim.metrics.accuracy(tf.to_int32(predictions_val),
+                                                            tf.to_int32(target_labels_val))
+                tf.summary.scalar('Accuracy_Validation', accuracy_validation)
+
+                if num_labels == 2:
+                    auc_validation = slim.metrics.streaming_auc(tf.sigmoid(logit_val),
+                                                                tf.to_int32(target_labels_val))
+                    tf.summary.scalar('AUC_Validation', auc_validation)
+
+
+            # runs a training loop
             slim.learning.train(
                 train_op,
                 logdir=FLAGS.logdir + '/train',
