@@ -439,3 +439,80 @@ def alexnet_model(inputs,
 
     with slim.arg_scope(alexnet_v2_arg_scope()):
         return alexnet_v2(inputs, is_training, emb_size)
+
+
+def suanet(inputs,
+           is_training=True,
+           augmentation_function=None,
+           emb_size=128,
+           l2_weight=1e-4,
+           img_shape=None,
+           new_shape=None,
+           image_summary=False,
+           batch_norm_decay=0.99):
+    """Mostly identical to slim.nets.alexnt, except for the reverted fc layers"""
+
+    from tensorflow.contrib import layers
+    from tensorflow.contrib.framework.python.ops import arg_scope
+    from tensorflow.contrib.layers.python.layers import layers as layers_lib
+    from tensorflow.contrib.layers.python.layers import regularizers
+    from tensorflow.python.ops import init_ops
+    from tensorflow.python.ops import nn_ops
+    from tensorflow.python.ops import variable_scope
+
+    def suanet_v2_arg_scope(weight_decay=0.0005):
+        with arg_scope(
+                [layers.conv2d, layers_lib.fully_connected],
+                activation_fn=nn_ops.relu,
+                biases_initializer=init_ops.constant_initializer(0.1),
+                weights_regularizer=regularizers.l2_regularizer(weight_decay)):
+            with arg_scope([layers.conv2d], padding='SAME'):
+                with arg_scope([layers_lib.max_pool2d], padding='SAME') as arg_sc:
+                    return arg_sc
+
+    def suanet_v2(inputs,
+                   is_training=True,
+                   emb_size=4096,
+                   scope='alexnet_v2'):
+
+        inputs = tf.cast(inputs, tf.float32)
+        if new_shape is not None:
+            shape = new_shape
+            inputs = tf.image.resize_images(
+                inputs,
+                tf.constant(new_shape[:2]),
+                method=tf.image.ResizeMethod.BILINEAR)
+        else:
+            shape = img_shape
+        if is_training and augmentation_function is not None:
+            inputs = augmentation_function(inputs, shape)
+        if image_summary:
+            tf.summary.image('Inputs', inputs, max_outputs=3)
+
+        net = inputs
+        mean = tf.reduce_mean(net, [1, 2], True)
+        std = tf.reduce_mean(tf.square(net - mean), [1, 2], True)
+        net = (net - mean) / (std + 1e-5)
+        inputs = net
+
+        with variable_scope.variable_scope(scope, 'alexnet_v2', [inputs]) as sc:
+            end_points_collection = sc.original_name_scope + '_end_points'
+
+            # Collect outputs for conv2d, fully_connected and max_pool2d.
+            with arg_scope(
+                    [layers.conv2d, layers_lib.fully_connected, layers_lib.max_pool2d],
+                    outputs_collections=[end_points_collection]):
+                net = layers.conv2d(
+                    inputs, 96, [11, 11], 4, scope='conv1')
+                net = layers_lib.max_pool2d(net, [3, 3], 2, scope='pool1')
+                net = layers.conv2d(net, 256, [5, 5], scope='conv2')
+                net = layers_lib.max_pool2d(net, [3, 3], 2, scope='pool2')
+                net = layers.conv2d(net, emb_size, [3, 3], scope='conv3')
+                net = layers_lib.max_pool2d(net, [16, 16], 2, scope='pool5')
+
+                net = slim.flatten(net, scope='flatten')
+
+        return net
+
+    with slim.arg_scope(suanet_v2_arg_scope()):
+        return suanet_v2(inputs, is_training, emb_size)
