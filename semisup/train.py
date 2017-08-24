@@ -75,7 +75,7 @@ flags.DEFINE_float('minimum_learning_rate', 1e-6,
 
 flags.DEFINE_float('decay_factor', 0.33, 'Learning rate decay factor.')
 
-flags.DEFINE_float('decay_steps', 60000,
+flags.DEFINE_float('decay_steps', 9000,
                    'Learning rate decay interval in steps.')
 
 flags.DEFINE_float('visit_weight', 0.0, 'Weight for visit loss.')
@@ -105,7 +105,7 @@ flags.DEFINE_integer('walker_weight_envelope_delay', 3000,
 
 flags.DEFINE_float('logit_weight', 1.0, 'Weight for logit loss.')
 
-flags.DEFINE_integer('max_steps', 100000, 'Number of training steps.')
+flags.DEFINE_integer('max_steps', 12000, 'Number of training steps.')
 
 flags.DEFINE_bool('augmentation', False,
                   'Apply data augmentation during training.')
@@ -152,6 +152,9 @@ flags.DEFINE_integer('ps_tasks', 0,
 flags.DEFINE_integer('task', 0,
                      'The Task ID. This value is used when training with '
                      'multiple workers to identify each worker.')
+
+flags.DEFINE_string('note', '',
+                    'string for any note')
 
 
 def logistic_growth(current_step, target, steps):
@@ -371,7 +374,7 @@ def main(argv):
                     staircase=True),
                 FLAGS.minimum_learning_rate)
 
-            # Create training operation and start the actual training loop.
+            # Create training operation
             train_op = model.create_train_op(t_learning_rate)
 
             config = tf.ConfigProto()
@@ -392,7 +395,7 @@ def main(argv):
                 if num_labels == 2:
                     auc_validation = slim.metrics.streaming_auc(tf.nn.softmax(logit_val)[:, 1],
                                                                 tf.to_int32(target_labels_val))
-                    tf.summary.scalar('AUC_Validation', auc_validation[0])
+                    tf.summary.scalar('AUC_Validation', auc_validation[1])
 
             # # for debugging
             # def train_step_fn(session, *args, **kwargs):
@@ -400,6 +403,9 @@ def main(argv):
             #
             #     if train_step_fn.step % 1000 == 0:
             #         # fill this
+            #         print('----------------------------------------------')
+            #         print(session.run(auc_validation))
+            #         print('----------------------------------------------')
             #
             #     train_step_fn.step += 1
             #     return [total_loss, should_stop]
