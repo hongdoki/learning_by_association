@@ -444,13 +444,13 @@ def alexnet_model(inputs,
 def suanet(inputs,
            is_training=True,
            augmentation_function=None,
-           emb_size=128,
+           emb_size=256,
            l2_weight=1e-4,
            img_shape=None,
            new_shape=None,
            image_summary=False,
            batch_norm_decay=0.99):
-    """Mostly identical to slim.nets.alexnt, except for the reverted fc layers"""
+    """model based on alexnet and fewer parameter (designed by kilho kim)"""
 
     from tensorflow.contrib import layers
     from tensorflow.contrib.framework.python.ops import arg_scope
@@ -460,7 +460,7 @@ def suanet(inputs,
     from tensorflow.python.ops import nn_ops
     from tensorflow.python.ops import variable_scope
 
-    def suanet_v2_arg_scope(weight_decay=0.0005):
+    def suanet_v2_arg_scope(weight_decay=l2_weight):
         with arg_scope(
                 [layers.conv2d, layers_lib.fully_connected],
                 activation_fn=nn_ops.relu,
@@ -472,8 +472,8 @@ def suanet(inputs,
 
     def suanet_v2(inputs,
                    is_training=True,
-                   emb_size=4096,
-                   scope='alexnet_v2'):
+                   emb_size=256,
+                   scope='suanet_v2'):
 
         inputs = tf.cast(inputs, tf.float32)
         if new_shape is not None:
@@ -495,7 +495,7 @@ def suanet(inputs,
         net = (net - mean) / (std + 1e-5)
         inputs = net
 
-        with variable_scope.variable_scope(scope, 'alexnet_v2', [inputs]) as sc:
+        with variable_scope.variable_scope(scope, 'suanet_v2', [inputs]) as sc:
             end_points_collection = sc.original_name_scope + '_end_points'
 
             # Collect outputs for conv2d, fully_connected and max_pool2d.
@@ -508,7 +508,7 @@ def suanet(inputs,
                 net = layers.conv2d(net, 256, [5, 5], scope='conv2')
                 net = layers_lib.max_pool2d(net, [3, 3], 2, scope='pool2')
                 net = layers.conv2d(net, emb_size, [3, 3], scope='conv3')
-                net = layers_lib.max_pool2d(net, [16, 16], 2, scope='pool5')
+                net = layers_lib.max_pool2d(net, [16, 16], 16, scope='pool3')
 
                 net = slim.flatten(net, scope='flatten')
 
