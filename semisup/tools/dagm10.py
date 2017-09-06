@@ -11,15 +11,24 @@ DATADIR = data_dirs.dagm
 NUM_LABELS = 2
 IMAGE_SHAPE = [256, 256, 1]
 
+SPLITS_TO_SIZES = {'train': 18072, 'val': 2007,
+                   'train_cls0': 17322, 'train_cls1': 750,
+                   'val_cls0': 1937, 'val_cls1': 70}
+FILE_PATTERN = 'source_d10_%s.tfrecords'
+ITEMS_TO_DESCRIPTIONS = {
+    'image': 'A [256 x 256 x 1] image.',
+    'label': 'A single integer between 0 and 1',
+}
+
 
 def get_data(name):
   """Utility for convenient data loading."""
 
   if name == 'train' or name == 'unlabeled':
-    return np.expand_dims(np.load(os.path.join(DATADIR, 'source_d10_X_train.npy')), axis=-1), \
-           np.argmax(np.load(os.path.join(DATADIR, 'source_d10_y_train.npy')), axis=1)
+    return np.expand_dims(np.load(os.path.join(DATADIR, 'source_d10_train_X.npy')), axis=-1), \
+           np.argmax(np.load(os.path.join(DATADIR, 'source_d10_train_y.npy')), axis=1)
   # custom svhn has only training/validation set
   elif name == 'test':
-    return np.expand_dims(np.load(os.path.join(DATADIR, 'source_d10_X_val.npy')), axis=-1), \
-           np.argmax(np.load(os.path.join(DATADIR, 'source_d10_y_val.npy')), axis=1)
+    return np.expand_dims(np.load(os.path.join(DATADIR, 'source_d10_val_X.npy')), axis=-1), \
+           np.argmax(np.load(os.path.join(DATADIR, 'source_d10_val_y.npy')), axis=1)
 

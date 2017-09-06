@@ -33,6 +33,7 @@ from tensorflow.python.platform import app
 from tensorflow.python.platform import flags
 from tensorflow.python.training import saver as tf_saver
 from tensorflow.contrib.slim.python.slim.learning import train_step
+import tools.data_util as data_util
 
 FLAGS = flags.FLAGS
 
@@ -156,6 +157,9 @@ flags.DEFINE_integer('task', 0,
 flags.DEFINE_string('note', '',
                     'string for any note')
 
+flags.DEFINE_bool('load_each_tfrecords', False,
+                  'Load training data of each class using each tfrecords file, it is slower but can handle large data.')
+
 
 def logistic_growth(current_step, target, steps):
     """Logistic envelope from zero to target value.
@@ -212,44 +216,46 @@ def main(argv):
     del argv
     # store experiment information
     insert_hyper_params_into_tinydb(FLAGS)
+    architecture = getattr(semisup.architectures, FLAGS.architecture)
+    seed = FLAGS.sup_seed if FLAGS.sup_seed != -1 else None
 
     # Load data.
     dataset_tools = import_module('tools.' + FLAGS.dataset)
-    train_images, train_labels = dataset_tools.get_data('train')
     if FLAGS.target_dataset is not None:
         target_dataset_tools = import_module('tools.' + FLAGS.target_dataset)
-        train_images_unlabeled, _ = target_dataset_tools.get_data(
-            FLAGS.target_dataset_split)
+        #TODO: load validation dataset using tfrecords
         target_val_data = target_dataset_tools.get_data('validation')
         if target_val_data:
             target_images_val, target_labels_val = target_val_data
         else:
             print('Warning: target data has no validation set.')
     else:
-        train_images_unlabeled, _ = dataset_tools.get_data('unlabeled')
-
-    architecture = getattr(semisup.architectures, FLAGS.architecture)
+        target_dataset_tools = dataset_tools
 
     num_labels = dataset_tools.NUM_LABELS
     image_shape = dataset_tools.IMAGE_SHAPE
 
-    # Sample labeled training subset.
-    seed = FLAGS.sup_seed if FLAGS.sup_seed != -1 else None
-    sup_by_label = semisup.sample_by_label(train_images, train_labels,
-                                           FLAGS.sup_per_class, num_labels,
-                                           seed)
+    if not FLAGS.load_each_tfrecords:
+        train_images, train_labels = dataset_tools.get_data('train')
+        train_images_unlabeled, _ = target_dataset_tools.get_data(
+            FLAGS.target_dataset_split if FLAGS.target_dataset_split is not None else 'unlabeled')
 
-    # Sample unlabeled training subset.
-    if FLAGS.unsup_samples > -1:
-        num_unlabeled = len(train_images_unlabeled)
-        assert FLAGS.unsup_samples <= num_unlabeled, (
-            'Chose more unlabeled samples ({})'
-            ' than there are in the '
-            'unlabeled batch ({}).'.format(FLAGS.unsup_samples, num_unlabeled))
+        # Sample labeled training subset.
+        sup_by_label = semisup.sample_by_label(train_images, train_labels,
+                                               FLAGS.sup_per_class, num_labels,
+                                               seed)
 
-        rng = np.random.RandomState(seed=seed)
-        train_images_unlabeled = train_images_unlabeled[rng.choice(
-            num_unlabeled, FLAGS.unsup_samples, False)]
+        # Sample unlabeled training subset.
+        if FLAGS.unsup_samples > -1:
+            num_unlabeled = len(train_images_unlabeled)
+            assert FLAGS.unsup_samples <= num_unlabeled, (
+                'Chose more unlabeled samples ({})'
+                ' than there are in the '
+                'unlabeled batch ({}).'.format(FLAGS.unsup_samples, num_unlabeled))
+
+            rng = np.random.RandomState(seed=seed)
+            train_images_unlabeled = train_images_unlabeled[rng.choice(
+                num_unlabeled, FLAGS.unsup_samples, False)]
 
     graph = tf.Graph()
     with graph.as_default():
@@ -257,10 +263,22 @@ def main(argv):
                                                       merge_devices=True)):
 
             # Set up inputs.
-            t_unsup_images = semisup.create_input(train_images_unlabeled, None,
-                                                  FLAGS.unsup_batch_size)
-            t_sup_images, t_sup_labels = semisup.create_per_class_inputs(
-                sup_by_label, FLAGS.sup_per_batch)
+            if FLAGS.load_each_tfrecords:
+               # generate batch of large training data using tfrecords, slim Dataset
+                t_unsup_images, _ = data_util.dataset_to_batch(
+                    data_util.get_slim_dataset(target_dataset_tools, FLAGS.target_dataset_split),
+                    FLAGS.unsup_batch_size
+                )
+                t_sup_images, t_sup_labels = data_util.generate_class_balanced_batch_with_slim_dataset(
+                    dataset_tools, FLAGS.sup_per_batch)
+            else:
+                t_unsup_images = semisup.create_input(train_images_unlabeled, None,
+                                                      FLAGS.unsup_batch_size)
+                t_sup_images, t_sup_labels = semisup.create_per_class_inputs(
+                    sup_by_label, FLAGS.sup_per_batch)
+                # t_sup_labels = slim.one_hot_encoding(t_sup_labels, num_labels)
+
+
 
             if FLAGS.remove_classes:
                 t_sup_images = tf.slice(

@@ -11,6 +11,12 @@ DATADIR = data_dirs.mnist_custom
 NUM_LABELS = 10
 IMAGE_SHAPE = [32, 32, 3]
 
+SPLITS_TO_SIZES = {'train': 54000, 'val': 6000, 'test': 10000}
+FILE_PATTERN = 'target_mnist_%s.tfrecords'
+ITEMS_TO_DESCRIPTIONS = {
+    'image': 'A [32 x 32 x 3] RGB image. (actually gray scale)',
+    'label': 'A single integer between 0 and 9',
+}
 
 def get_data(name):
   """Utility for convenient data loading."""
