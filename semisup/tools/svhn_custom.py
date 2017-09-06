@@ -16,10 +16,9 @@ def get_data(name):
   """Utility for convenient data loading."""
 
   if name == 'train' or name == 'unlabeled':
-    return np.load(os.path.join(DATADIR, 'source_svhn_X_train.npy')), \
-           np.argmax(np.load(os.path.join(DATADIR, 'source_svhn_y_train.npy')), axis=1)
+    return np.load(os.path.join(DATADIR, 'source_svhn_train_X.npy')), \
+           np.argmax(np.load(os.path.join(DATADIR, 'source_svhn_train_y.npy')), axis=1)
   # custom svhn has only training/validation set
   elif name == 'test':
-    return np.load(os.path.join(DATADIR, 'source_svhn_X_val.npy')), \
-           np.argmax(np.load(os.path.join(DATADIR, 'source_svhn_y_val.npy')), axis=1)
-
+    return np.load(os.path.join(DATADIR, 'source_svhn_val_X.npy')), \
+           np.argmax(np.load(os.path.join(DATADIR, 'source_svhn_val_y.npy')), axis=1)
