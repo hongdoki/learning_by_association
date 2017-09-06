@@ -16,12 +16,12 @@ def get_data(name):
   """Utility for convenient data loading."""
 
   if name == 'train' or name == 'unlabeled':
-    return np.load(os.path.join(DATADIR, 'target_mnist_X_train.npy')), \
-           np.argmax(np.load(os.path.join(DATADIR, 'target_mnist_y_train.npy')), axis=1)
+    return np.load(os.path.join(DATADIR, 'target_mnist_train_X.npy')), \
+           np.argmax(np.load(os.path.join(DATADIR, 'target_mnist_train_y.npy')), axis=1)
   elif name == 'validation':
-    return np.load(os.path.join(DATADIR, 'target_mnist_X_val.npy')), \
-           np.argmax(np.load(os.path.join(DATADIR, 'target_mnist_y_val.npy')), axis=1)
+    return np.load(os.path.join(DATADIR, 'target_mnist_val_X.npy')), \
+           np.argmax(np.load(os.path.join(DATADIR, 'target_mnist_val_y.npy')), axis=1)
   elif name == 'test':
-    return np.load(os.path.join(DATADIR, 'target_mnist_X_test.npy')), \
-           np.argmax(np.load(os.path.join(DATADIR, 'target_mnist_y_test.npy')), axis=1)
+    return np.load(os.path.join(DATADIR, 'target_mnist_test_X.npy')), \
+           np.argmax(np.load(os.path.join(DATADIR, 'target_mnist_test_y.npy')), axis=1)
 
