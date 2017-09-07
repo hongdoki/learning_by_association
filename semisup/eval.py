@@ -119,7 +119,7 @@ def main(_):
         # Accuracy metric for summaries.
         metric_dict = {'Accuracy_Test': slim.metrics.streaming_accuracy(predictions, labels)}
         if num_labels == 2:
-            metric_dict['AUC_Test'] = slim.metrics.streaming_auc(predictions, labels)
+            metric_dict['AUC_Test'] = slim.metrics.streaming_auc(tf.nn.softmax(model.test_logit)[:, 1], labels)
         names_to_values, names_to_updates = slim.metrics.aggregate_metric_map(metric_dict)
         for name, value in names_to_values.iteritems():
             tf.summary.scalar(name, value)
