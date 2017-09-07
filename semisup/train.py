@@ -278,7 +278,9 @@ def main(argv):
                     sup_by_label, FLAGS.sup_per_batch)
                 # t_sup_labels = slim.one_hot_encoding(t_sup_labels, num_labels)
 
-
+            # TODO: load validation dataset using tfrecords
+            target_images_val, target_labels_val = semisup.create_input(
+                target_images_val, target_labels_val, FLAGS.unsup_batch_size)
 
             if FLAGS.remove_classes:
                 t_sup_images = tf.slice(
@@ -409,11 +411,11 @@ def main(argv):
 
                 accuracy_validation = slim.metrics.accuracy(tf.to_int32(predictions_val),
                                                             tf.to_int32(target_labels_val))
-                tf.summary.scalar('Accuracy_Validation', accuracy_validation)
+                tf.summary.scalar('Validation_target_Accuracy', accuracy_validation)
                 if num_labels == 2:
                     auc_validation = slim.metrics.streaming_auc(tf.nn.softmax(logit_val)[:, 1],
                                                                 tf.to_int32(target_labels_val))
-                    tf.summary.scalar('AUC_Validation', auc_validation[1])
+                    tf.summary.scalar('Validation_target_AUC', auc_validation[1])
 
             # # for debugging
             # def train_step_fn(session, *args, **kwargs):
