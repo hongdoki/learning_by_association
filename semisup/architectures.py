@@ -508,7 +508,10 @@ def suanet(inputs,
                 net = layers.conv2d(net, 256, [5, 5], scope='conv2')
                 net = layers_lib.max_pool2d(net, [3, 3], 2, scope='pool2')
                 net = layers.conv2d(net, emb_size, [3, 3], scope='conv3')
-                net = layers_lib.max_pool2d(net, [16, 16], 16, scope='pool3')
+                height = net.get_shape()[1]
+                width = net.get_shape()[2]
+                net = layers_lib.max_pool2d(net, [height, width], [height, width], scope='pool3')
+                # net = layers_lib.max_pool2d(net, [16, 16], 16, scope='pool3')
 
                 net = slim.flatten(net, scope='flatten')
 
