@@ -83,7 +83,7 @@ def get_slim_dataset(dataset_tools, split_name, cls=None, reader=None):
   }
 
   items_to_handlers = {
-      'image': slim.tfexample_decoder.Image(shape=image_shape, channels=3),
+      'image': slim.tfexample_decoder.Image(shape=image_shape, channels=image_shape[-1]),
       'label': slim.tfexample_decoder.Tensor('image/class/label', shape=[]),
   }
 
