@@ -471,9 +471,9 @@ def suanet(inputs,
                     return arg_sc
 
     def suanet_v2(inputs,
-                   is_training=True,
-                   emb_size=256,
-                   scope='suanet_v2'):
+                  is_training=True,
+                  emb_size=256,
+                  scope='suanet_v2'):
 
         inputs = tf.cast(inputs, tf.float32)
         if new_shape is not None:
@@ -519,3 +519,32 @@ def suanet(inputs,
 
     with slim.arg_scope(suanet_v2_arg_scope()):
         return suanet_v2(inputs, is_training, emb_size)
+
+
+def resnet_v2_18(inputs,
+                 is_training=True,
+                 batch_norm_decay=None,
+                 augmentation_function=None,
+                 emb_size=256, # embedding size is fixed as 2048
+                 l2_weight=1e-4,
+                 img_shape=None,
+                 new_shape=None,
+                 image_summary=False):
+    """ResNet-18 model"""
+    from tensorflow.contrib.slim.nets import resnet_v2 as rv2
+    resnet_v2 = rv2.resnet_v2
+    resnet_v2_block =rv2.resnet_v2_block
+
+    inputs = tf.cast(inputs, tf.float32)
+
+    blocks = [
+        resnet_v2_block('block1', base_depth=64, num_units=2, stride=2),
+        resnet_v2_block('block2', base_depth=128, num_units=2, stride=2),
+        resnet_v2_block('block3', base_depth=256, num_units=6, stride=2),
+        resnet_v2_block('block4', base_depth=512, num_units=2, stride=2),
+    ]
+
+    net, end_points = resnet_v2(inputs, blocks, num_classes=None, is_training=is_training,
+                                global_pool=True, output_stride=None, include_root_block=True)
+    flatten = slim.flatten(net, scope='flatten')
+    return flatten
