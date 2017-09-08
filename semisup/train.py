@@ -409,9 +409,9 @@ def main(argv):
                 logit_val = model.embedding_to_logit(model.image_to_embedding(target_images_val))
                 predictions_val = tf.argmax(logit_val, 1)
 
-                accuracy_validation = slim.metrics.accuracy(tf.to_int32(predictions_val),
+                accuracy_validation = slim.metrics.streaming_accuracy(tf.to_int32(predictions_val),
                                                             tf.to_int32(target_labels_val))
-                tf.summary.scalar('Validation_target_Accuracy', accuracy_validation)
+                tf.summary.scalar('Validation_target_Accuracy', accuracy_validation[1])
                 if num_labels == 2:
                     auc_validation = slim.metrics.streaming_auc(tf.nn.softmax(logit_val)[:, 1],
                                                                 tf.to_int32(target_labels_val))
