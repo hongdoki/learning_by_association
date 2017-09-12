@@ -212,6 +212,20 @@ def insert_hyper_params_into_tinydb(flags_t):
     table.insert(flags_t.__flags)
 
 
+def summary_validation(model, images, labels, source_or_target, num_classes):
+    logit_val = model.embedding_to_logit(model.image_to_embedding(images))
+    predictions_val = tf.argmax(logit_val, 1)
+    # accuracy
+    accuracy_validation = slim.metrics.streaming_accuracy(tf.to_int32(predictions_val),
+                                                          tf.to_int32(labels))
+    tf.summary.scalar('Validation_%s_Accuracy' % source_or_target, accuracy_validation[1])
+    # AUC
+    if num_classes == 2:
+        auc_validation = slim.metrics.streaming_auc(tf.nn.softmax(logit_val)[:, 1],
+                                                    tf.to_int32(labels))
+        tf.summary.scalar('Validation_%s_AUC' % source_or_target, auc_validation[1])
+
+
 def main(argv):
     del argv
     # store experiment information
@@ -221,6 +235,13 @@ def main(argv):
 
     # Load data.
     dataset_tools = import_module('tools.' + FLAGS.dataset)
+    #TODO: load validation dataset using tfrecords
+    source_val_data = dataset_tools.get_data('validation')
+    if source_val_data:
+        source_images_val, source_labels_val = source_val_data
+    else:
+        print('Warning: target data has no validation set.')
+
     if FLAGS.target_dataset is not None:
         target_dataset_tools = import_module('tools.' + FLAGS.target_dataset)
         #TODO: load validation dataset using tfrecords
@@ -279,6 +300,9 @@ def main(argv):
                 # t_sup_labels = slim.one_hot_encoding(t_sup_labels, num_labels)
 
             # TODO: load validation dataset using tfrecords
+            source_images_val, source_labels_val = semisup.create_input(
+                source_images_val, source_labels_val, FLAGS.unsup_batch_size
+            )
             target_images_val, target_labels_val = semisup.create_input(
                 target_images_val, target_labels_val, FLAGS.unsup_batch_size)
 
@@ -405,17 +429,11 @@ def main(argv):
                                    keep_checkpoint_every_n_hours=FLAGS.keep_checkpoint_every_n_hours)  # pylint:disable=line-too-long
 
             # for validation
-            if target_val_data:
-                logit_val = model.embedding_to_logit(model.image_to_embedding(target_images_val))
-                predictions_val = tf.argmax(logit_val, 1)
+            if source_val_data:
+                summary_validation(model, source_images_val, source_labels_val, 'source', num_labels)
 
-                accuracy_validation = slim.metrics.streaming_accuracy(tf.to_int32(predictions_val),
-                                                            tf.to_int32(target_labels_val))
-                tf.summary.scalar('Validation_target_Accuracy', accuracy_validation[1])
-                if num_labels == 2:
-                    auc_validation = slim.metrics.streaming_auc(tf.nn.softmax(logit_val)[:, 1],
-                                                                tf.to_int32(target_labels_val))
-                    tf.summary.scalar('Validation_target_AUC', auc_validation[1])
+            if target_val_data:
+                summary_validation(model, target_images_val, target_labels_val, 'target', num_labels)
 
             # # for debugging
             # def train_step_fn(session, *args, **kwargs):
