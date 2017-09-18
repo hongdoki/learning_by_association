@@ -33,6 +33,7 @@ import tensorflow as tf
 import tensorflow.contrib.slim as slim
 from tensorflow.python.platform import app
 from tensorflow.python.platform import flags
+import numpy as np
 
 FLAGS = flags.FLAGS
 
@@ -63,6 +64,16 @@ flags.DEFINE_integer('timeout', 1200,
                      'If left as `None`, then the process will wait '
                      'indefinitely.')
 
+flags.DEFINE_integer('max_num_of_eval', None,
+                     'The maximum number of evaluations '
+                     'If left as `None`, then the process will perform infinitely.')
+
+flags.DEFINE_boolean('image_summary', False,
+                     'summary tp, tn, fp, fn images')
+
+flags.DEFINE_string('dataset_name', 'test',
+                    'string for name of dataset using in evaluation')
+
 def main(_):
     # Get dataset-related toolbox.
     dataset_tools = import_module('tools.' + FLAGS.dataset)
@@ -71,7 +82,7 @@ def main(_):
     num_labels = dataset_tools.NUM_LABELS
     image_shape = dataset_tools.IMAGE_SHAPE
 
-    test_images, test_labels = dataset_tools.get_data('test')
+    test_images, test_labels = dataset_tools.get_data(FLAGS.dataset_name)
 
     graph = tf.Graph()
     with graph.as_default():
@@ -99,7 +110,6 @@ def main(_):
             image_summary=False,
             emb_size=FLAGS.emb_size)
 
-
         # Set up semisup model.
         model = semisup.SemisupModel(
             model_function,
@@ -117,12 +127,36 @@ def main(_):
         predictions = tf.argmax(model.test_logit, 1)
 
         # Accuracy metric for summaries.
-        metric_dict = {'Accuracy_Test': slim.metrics.streaming_accuracy(predictions, labels)}
+        metric_dict = {'Accuracy_%s' % FLAGS.dataset_name: slim.metrics.streaming_accuracy(predictions, labels)}
         if num_labels == 2:
-            metric_dict['AUC_Test'] = slim.metrics.streaming_auc(tf.nn.softmax(model.test_logit)[:, 1], labels)
+            metric_dict['AUC_%s' % FLAGS.dataset_name] = slim.metrics.streaming_auc(tf.nn.softmax(model.test_logit)[:, 1], labels)
         names_to_values, names_to_updates = slim.metrics.aggregate_metric_map(metric_dict)
         for name, value in names_to_values.iteritems():
             tf.summary.scalar(name, value)
+
+        if FLAGS.image_summary:
+            true_comparison = tf.equal(predictions, labels)
+            positive_comparison = tf.equal(predictions, np.ones(predictions.get_shape()))
+
+            # tp
+            true_positives = tf.gather(images, tf.where(tf.logical_and(true_comparison, positive_comparison)), axis=0)
+            true_positives = tf.reshape(true_positives, [-1] + dataset_tools.IMAGE_SHAPE)
+            tf.summary.image('true_positives', true_positives, max_outputs=1000)
+            # tn
+            true_negatives = tf.gather(images, tf.where(tf.logical_and(true_comparison,
+                                                                       tf.logical_not(positive_comparison))), axis=0)
+            true_negatives = tf.reshape(true_negatives, [-1] + dataset_tools.IMAGE_SHAPE)
+            tf.summary.image('true_negatives', true_negatives, max_outputs=1000)
+
+            false_positives = tf.gather(images, tf.where(tf.logical_and(tf.logical_not(true_comparison),
+                                                                        positive_comparison)), axis=0)
+            false_positives = tf.reshape(false_positives, [-1] + dataset_tools.IMAGE_SHAPE)
+            tf.summary.image('false_positives', false_positives, max_outputs=1000)
+
+            false_negatives = tf.gather(images, tf.where(tf.logical_and(tf.logical_not(true_comparison),
+                                                                        tf.logical_not(positive_comparison))), axis=0)
+            false_negatives = tf.reshape(false_negatives, [-1] + dataset_tools.IMAGE_SHAPE)
+            tf.summary.image('false_negatives', false_negatives, max_outputs=1000)
 
         # Run the actual evaluation loop.
         num_batches = math.ceil(len(test_labels) / float(FLAGS.eval_batch_size))
@@ -137,6 +171,7 @@ def main(_):
             eval_op=names_to_updates.values(),
             eval_interval_secs=FLAGS.eval_interval_secs,
             session_config=config,
+            max_number_of_evaluations=FLAGS.max_num_of_eval,
             timeout=FLAGS.timeout
         )
 
