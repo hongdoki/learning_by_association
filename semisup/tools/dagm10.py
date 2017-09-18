@@ -28,7 +28,7 @@ def get_data(name):
     return np.expand_dims(np.load(os.path.join(DATADIR, 'source_d10_train_X.npy')), axis=-1), \
            np.argmax(np.load(os.path.join(DATADIR, 'source_d10_train_y.npy')), axis=1)
   # custom svhn has only training/validation set
-  elif name == 'test':
+  elif name == 'validation':
     return np.expand_dims(np.load(os.path.join(DATADIR, 'source_d10_val_X.npy')), axis=-1), \
            np.argmax(np.load(os.path.join(DATADIR, 'source_d10_val_y.npy')), axis=1)
 
