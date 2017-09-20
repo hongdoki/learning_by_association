@@ -126,9 +126,17 @@ def generate_class_balanced_batch_with_slim_dataset(dataset_tools, batch_size_pe
   num_classes = dataset_tools.NUM_LABELS
   batch_images, batch_labels = [], []
 
+  if type(batch_size_per_class) == str:
+      batch_size_per_class_list = [int(s) for s in batch_size_per_class.split(',')]
+      assert len(batch_size_per_class_list) == num_classes, \
+          'number of classes not matched: %d classes in batch size specified but actually %d classes' % \
+          (len(batch_size_per_class_list), num_classes)
+  else:
+      batch_size_per_class_list = [batch_size_per_class for i in range(num_classes)]
+
   for i in xrange(num_classes):
       sup_dataset = get_slim_dataset(dataset_tools, 'train', cls=i)
-      images_each, labels_each = dataset_to_batch(sup_dataset, batch_size_per_class)
+      images_each, labels_each = dataset_to_batch(sup_dataset, batch_size_per_class_list[i])
       batch_images.append(images_each)
       batch_labels.append(labels_each)
 

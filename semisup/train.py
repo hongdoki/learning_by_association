@@ -63,6 +63,9 @@ flags.DEFINE_integer('sup_seed', -1,
 flags.DEFINE_integer('sup_per_batch', 10,
                      'Number of labeled samples per class per batch.')
 
+flags.DEFINE_string('sup_per_batch_csv', None,
+                    'comma separated values for the numbers of examples of each class in a supervised batch')
+
 flags.DEFINE_integer('unsup_batch_size', 100,
                      'Number of unlabeled samples per batch.')
 
@@ -204,12 +207,22 @@ def apply_envelope(type, step, final_weight, growing_steps, delay):
     return tf.clip_by_value(value, 0., final_weight)
 
 
-def insert_hyper_params_into_tinydb(flags_t):
-    from tinydb import TinyDB
+def insert_hyper_params_into_tinydb(flags_t, key):
+    from tinydb import TinyDB, where
     from tools.data_dirs import tinydb_path
     db = TinyDB(tinydb_path)
     table = db.table('lba-hyper-params')
-    table.insert(flags_t.__flags)
+
+    flags_t_dict = flags_t.__flags
+
+    # duplicate check
+    same_hps = table.search(where(key)==flags_t_dict[key])
+    for hp in same_hps:
+        if hp == flags_t_dict:
+            print('Warning: same hyper-parameters already exists. not saved in tinyDB.')
+            return
+
+    table.insert(flags_t_dict)
 
 
 def summary_validation(model, images, labels, source_or_target, num_classes):
@@ -229,7 +242,7 @@ def summary_validation(model, images, labels, source_or_target, num_classes):
 def main(argv):
     del argv
     # store experiment information
-    insert_hyper_params_into_tinydb(FLAGS)
+    insert_hyper_params_into_tinydb(FLAGS, 'logdir')
     architecture = getattr(semisup.architectures, FLAGS.architecture)
     seed = FLAGS.sup_seed if FLAGS.sup_seed != -1 else None
 
@@ -291,7 +304,7 @@ def main(argv):
                     FLAGS.unsup_batch_size
                 )
                 t_sup_images, t_sup_labels = data_util.generate_class_balanced_batch_with_slim_dataset(
-                    dataset_tools, FLAGS.sup_per_batch)
+                    dataset_tools, FLAGS.sup_per_batch_csv if FLAGS.sup_per_batch_csv else FLAGS.sup_per_batch)
             else:
                 t_unsup_images = semisup.create_input(train_images_unlabeled, None,
                                                       FLAGS.unsup_batch_size)
@@ -468,6 +481,12 @@ def main(argv):
             )
 
 
+def check_flags():
+    unparsed = FLAGS._parse_flags(sys.argv)
+    if len(unparsed) > 1:
+        print("Warning: Unparsed arguments exists: \"%s\"" % unparsed[1:])
+
 if __name__ == '__main__':
+    check_flags()
     tf.logging.set_verbosity(tf.logging.INFO)
     app.run()
