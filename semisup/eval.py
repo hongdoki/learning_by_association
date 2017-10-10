@@ -74,6 +74,9 @@ flags.DEFINE_boolean('image_summary', False,
 flags.DEFINE_string('dataset_name', 'test',
                     'string for name of dataset using in evaluation')
 
+flags.DEFINE_boolean('write_emb', False,
+                     'write embeddings as file')
+
 def main(_):
     # Get dataset-related toolbox.
     dataset_tools = import_module('tools.' + FLAGS.dataset)
@@ -123,6 +126,19 @@ def main(_):
         for var in slim.get_model_variables():
             tf.add_to_collection(tf.GraphKeys.MOVING_AVERAGE_VARIABLES, var)
 
+        # write embeddings to file
+        extra_eval_ops = []
+        if FLAGS.write_emb:
+            # batch_count = tf.Variable(0, name='batch_count', trainable=False, dtype=tf.int32)
+            # increment_batch_count = tf.assign(batch_count, batch_count + 1)
+            embeddings = model.test_emb
+            # write_emb_op = tf.write_file(tf.reduce_join([FLAGS.dataset_name, tf.as_string(batch_count)]),
+
+            extra_eval_ops.append(tf.write_file('%s/eval/%s_%s.emb' % (FLAGS.logdir, FLAGS.dataset, FLAGS.dataset_name),
+                                         tf.reduce_join(tf.as_string(embeddings), [1, 0], separator=',')))
+            extra_eval_ops.append(tf.write_file('%s/eval/%s_%s.lb' % (FLAGS.logdir, FLAGS.dataset, FLAGS.dataset_name),
+                                         tf.reduce_join(tf.as_string(labels), separator=',')))
+
         # Get prediction tensor from semisup model.
         predictions = tf.argmax(model.test_logit, 1)
 
@@ -168,11 +184,11 @@ def main(_):
             checkpoint_dir=FLAGS.logdir + '/train',
             logdir=FLAGS.logdir + '/eval',
             num_evals=num_batches,
-            eval_op=names_to_updates.values(),
+            eval_op=names_to_updates.values() + extra_eval_ops,
             eval_interval_secs=FLAGS.eval_interval_secs,
             session_config=config,
             max_number_of_evaluations=FLAGS.max_num_of_eval,
-            timeout=FLAGS.timeout
+            timeout=FLAGS.timeout,
         )
 
 
