@@ -158,7 +158,7 @@ flags.DEFINE_integer('task', 0,
                      'multiple workers to identify each worker.')
 
 flags.DEFINE_string('note', '',
-                    'string for any note')
+                    'any comment')
 
 flags.DEFINE_bool('load_each_tfrecords', False,
                   'Load training data of each class using each tfrecords file, it is slower but can handle large data.')
