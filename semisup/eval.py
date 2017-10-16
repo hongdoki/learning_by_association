@@ -34,6 +34,7 @@ import tensorflow.contrib.slim as slim
 from tensorflow.python.platform import app
 from tensorflow.python.platform import flags
 import numpy as np
+import os
 
 FLAGS = flags.FLAGS
 
@@ -126,6 +127,10 @@ def main(_):
         for var in slim.get_model_variables():
             tf.add_to_collection(tf.GraphKeys.MOVING_AVERAGE_VARIABLES, var)
 
+
+        # Get prediction tensor from semisup model.
+        predictions = tf.argmax(model.test_logit, 1)
+
         # write embeddings to file
         extra_eval_ops = []
         if FLAGS.write_emb:
@@ -138,9 +143,15 @@ def main(_):
                                          tf.reduce_join(tf.as_string(embeddings), [1, 0], separator=',')))
             extra_eval_ops.append(tf.write_file('%s/eval/%s_%s.lb' % (FLAGS.logdir, FLAGS.dataset, FLAGS.dataset_name),
                                          tf.reduce_join(tf.as_string(labels), separator=',')))
+            extra_eval_ops.append(tf.write_file('%s/eval/%s_%s.pred' % (FLAGS.logdir, FLAGS.dataset, FLAGS.dataset_name),
+                                         tf.reduce_join(tf.as_string(predictions), separator=',')))
+            if not os.path.exists('%s/eval/emb_images/%s_%s' % (FLAGS.logdir, FLAGS.dataset, FLAGS.dataset_name)):
+                os.makedirs('%s/eval/emb_images/%s_%s' % (FLAGS.logdir, FLAGS.dataset, FLAGS.dataset_name))
 
-        # Get prediction tensor from semisup model.
-        predictions = tf.argmax(model.test_logit, 1)
+            for i in range(FLAGS.eval_batch_size):
+                extra_eval_ops.append(tf.write_file('%s/eval/emb_images/%s_%s/%04d.png' %
+                                                    (FLAGS.logdir, FLAGS.dataset, FLAGS.dataset_name, i),
+                                                    tf.image.encode_png(tf.cast(images[i], tf.uint8))))
 
         # Accuracy metric for summaries.
         metric_dict = {'Accuracy_%s' % FLAGS.dataset_name: slim.metrics.streaming_accuracy(predictions, labels)}
@@ -176,6 +187,7 @@ def main(_):
 
         # Run the actual evaluation loop.
         num_batches = math.ceil(len(test_labels) / float(FLAGS.eval_batch_size))
+        # num_batches = 1
 
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
