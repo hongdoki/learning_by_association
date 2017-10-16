@@ -475,7 +475,7 @@ def main(argv):
                 startup_delay_steps=(FLAGS.task * 20),
                 log_every_n_steps=FLAGS.log_every_n_steps,
                 session_config=config,
-                trace_every_n_steps=1000,
+                trace_every_n_steps=FLAGS.log_every_n_steps,
                 saver=saver,
                 number_of_steps=FLAGS.max_steps,
             )
