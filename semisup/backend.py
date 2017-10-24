@@ -106,7 +106,9 @@ def confusion_matrix(labels, predictions, num_labels):
 class SemisupModel(object):
   """Helper class for setting up semi-supervised training."""
 
-  def __init__(self, model_func, num_labels, input_shape, test_in=None):
+  def __init__(self, model_func, num_labels, input_shape,
+               clf_l2_reg_scale=0.0001,
+               test_in=None):
     """Initialize SemisupModel class.
 
     Creates an evaluation graph for the provided model_func.
@@ -117,10 +119,12 @@ class SemisupModel(object):
       num_labels: Number of taget classes.
       input_shape: List, containing input images shape in form
           [height, width, channel_num].
+      clf_l2_reg_scale: regularization strength for classifier(embedding to logit fully connected layer)
       test_in: None or a tensor holding test images. If None, a placeholder will
         be created.
     """
 
+    self.clf_l2_reg_scale = clf_l2_reg_scale
     self.num_labels = num_labels
     self.step = slim.get_or_create_global_step()
     self.ema = tf.train.ExponentialMovingAverage(0.99, self.step)
@@ -149,7 +153,7 @@ class SemisupModel(object):
           embedding,
           self.num_labels,
           activation_fn=None,
-          weights_regularizer=slim.l2_regularizer(1e-4))
+          weights_regularizer=slim.l2_regularizer(self.clf_l2_reg_scale))
 
   def add_semisup_loss(self, a, b, labels, walker_weight=1.0, visit_weight=1.0):
     """Add semi-supervised classification loss to the model.

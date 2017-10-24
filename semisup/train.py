@@ -163,6 +163,8 @@ flags.DEFINE_string('note', '',
 flags.DEFINE_bool('load_each_tfrecords', False,
                   'Load training data of each class using each tfrecords file, it is slower but can handle large data.')
 
+flags.DEFINE_float('l2_reg_scale', 1e-4,
+                   'scale for l2 regularization')
 
 def logistic_growth(current_step, target, steps):
     """Logistic envelope from zero to target value.
@@ -362,7 +364,8 @@ def main(argv):
 
             # Set up semisup model.
             model = semisup.SemisupModel(model_function, num_labels,
-                                         image_shape)
+                                         image_shape,
+                                         clf_l2_reg_scale=FLAGS.l2_reg_scale)
 
             # Compute embeddings and logits.
             t_sup_emb = model.image_to_embedding(t_sup_images)
