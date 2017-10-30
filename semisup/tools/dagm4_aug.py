@@ -5,14 +5,14 @@ import numpy as np
 import data_dirs
 import os
 
-DATADIR = data_dirs.dagm
+DATADIR = os.path.join(data_dirs.dagm, 'augmented')
 
 
 NUM_LABELS = 2
 IMAGE_SHAPE = [256, 256, 1]
 
-SPLITS_TO_SIZES = {'train': 4559, 'val': 506, 'test': 5095,
-                   'train_cls0': 4412, 'train_cls1': 147,
+SPLITS_TO_SIZES = {'train': 18236, 'val': 506, 'test': 5095,
+                   'train_cls0': 17648, 'train_cls1': 588,
                    'val_cls0': 488, 'val_cls1': 18,
                    'test_cls0': 4953, 'test_cls1':142}
 FILE_PATTERN = 'target_d4_%s.tfrecords'
