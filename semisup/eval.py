@@ -33,8 +33,8 @@ import tensorflow as tf
 import tensorflow.contrib.slim as slim
 from tensorflow.python.platform import app
 from tensorflow.python.platform import flags
-import numpy as np
 import os
+import tools.data_util as data_util
 
 FLAGS = flags.FLAGS
 
@@ -69,14 +69,17 @@ flags.DEFINE_integer('max_num_of_eval', None,
                      'The maximum number of evaluations '
                      'If left as `None`, then the process will perform infinitely.')
 
-flags.DEFINE_boolean('image_summary', False,
-                     'summary tp, tn, fp, fn images')
+flags.DEFINE_boolean('extract_image', False,
+                     'extract images as file on evaluation')
 
 flags.DEFINE_string('dataset_name', 'test',
                     'string for name of dataset using in evaluation')
 
-flags.DEFINE_boolean('write_emb', False,
-                     'write embeddings as file')
+flags.DEFINE_boolean('extract_emb', False,
+                     'extract embeddings as file on evaluation')
+
+flags.DEFINE_boolean('load_tfrecords', False,
+                     'whether load dataset using tfrecords or not')
 
 def main(_):
     # Get dataset-related toolbox.
@@ -86,17 +89,23 @@ def main(_):
     num_labels = dataset_tools.NUM_LABELS
     image_shape = dataset_tools.IMAGE_SHAPE
 
-    test_images, test_labels = dataset_tools.get_data(FLAGS.dataset_name)
+    num_examples = dataset_tools.SPLITS_TO_SIZES[FLAGS.dataset_name]
 
     graph = tf.Graph()
     with graph.as_default():
 
-        # Set up input pipeline.
-        image, label = tf.train.slice_input_producer([test_images, test_labels])
-        images, labels = tf.train.batch(
-            [image, label], batch_size=FLAGS.eval_batch_size)
-        images = tf.cast(images, tf.float32)
-        labels = tf.cast(labels, tf.int64)
+        if FLAGS.load_tfrecords:
+            images, labels = data_util.dataset_to_batch(
+                data_util.get_slim_dataset(dataset_tools, FLAGS.dataset_name),
+                FLAGS.eval_batch_size)
+        else:
+            test_images, test_labels = dataset_tools.get_data(FLAGS.dataset_name)
+            # Set up input pipeline.
+            image, label = tf.train.slice_input_producer([test_images, test_labels])
+            images, labels = tf.train.batch(
+                [image, label], batch_size=FLAGS.eval_batch_size)
+            images = tf.cast(images, tf.float32)
+            labels = tf.cast(labels, tf.int64)
 
         # Reshape if necessary.
         if FLAGS.new_size > 0:
@@ -130,28 +139,42 @@ def main(_):
 
         # Get prediction tensor from semisup model.
         predictions = tf.argmax(model.test_logit, 1)
-
-        # write embeddings to file
+        proba = tf.nn.softmax(model.test_logit)[:, 1]
+        # write embeddings to file and extract image as file
         extra_eval_ops = []
-        if FLAGS.write_emb:
-            # batch_count = tf.Variable(0, name='batch_count', trainable=False, dtype=tf.int32)
-            # increment_batch_count = tf.assign(batch_count, batch_count + 1)
+        idx_batch = tf.random_uniform((), minval=0, maxval=tf.int64.max/FLAGS.eval_batch_size)
+
+        class ResultFilePathGenerator(object):
+            def __init__(self, logdir, dataset, dataset_name):
+                self.dataset_name = dataset_name
+                self.dataset = dataset
+                self.logdir = logdir
+
+            def gen(self, result_type, idx):
+                dir = os.path.join(self.logdir, 'eval', self.dataset, self.dataset_name, result_type)
+                if not os.path.exists(dir):
+                    os.makedirs(dir)
+                return tf.string_join((os.path.join(dir, ''), tf.as_string(idx), '.', result_type))
+
+        path_generator = ResultFilePathGenerator(FLAGS.logdir, FLAGS.dataset, FLAGS.dataset_name)
+
+        if FLAGS.extract_emb:
             embeddings = model.test_emb
-            # write_emb_op = tf.write_file(tf.reduce_join([FLAGS.dataset_name, tf.as_string(batch_count)]),
+            extra_eval_ops.append(tf.write_file(path_generator.gen('emb', idx_batch),
+                                  tf.reduce_join(tf.as_string(embeddings), [1, 0], separator=',')))
 
-            extra_eval_ops.append(tf.write_file('%s/eval/%s_%s.emb' % (FLAGS.logdir, FLAGS.dataset, FLAGS.dataset_name),
-                                         tf.reduce_join(tf.as_string(embeddings), [1, 0], separator=',')))
-            extra_eval_ops.append(tf.write_file('%s/eval/%s_%s.lb' % (FLAGS.logdir, FLAGS.dataset, FLAGS.dataset_name),
-                                         tf.reduce_join(tf.as_string(labels), separator=',')))
-            extra_eval_ops.append(tf.write_file('%s/eval/%s_%s.pred' % (FLAGS.logdir, FLAGS.dataset, FLAGS.dataset_name),
-                                         tf.reduce_join(tf.as_string(predictions), separator=',')))
-            if not os.path.exists('%s/eval/emb_images/%s_%s' % (FLAGS.logdir, FLAGS.dataset, FLAGS.dataset_name)):
-                os.makedirs('%s/eval/emb_images/%s_%s' % (FLAGS.logdir, FLAGS.dataset, FLAGS.dataset_name))
-
+        if FLAGS.extract_image:
             for i in range(FLAGS.eval_batch_size):
-                extra_eval_ops.append(tf.write_file('%s/eval/emb_images/%s_%s/%04d.png' %
-                                                    (FLAGS.logdir, FLAGS.dataset, FLAGS.dataset_name, i),
+                extra_eval_ops.append(tf.write_file(
+                    path_generator.gen('png', tf.add(tf.multiply(idx_batch, FLAGS.eval_batch_size), i)),
                                                     tf.image.encode_png(tf.cast(images[i], tf.uint8))))
+        if FLAGS.extract_emb or FLAGS.extract_image:
+            extra_eval_ops.append(tf.write_file(path_generator.gen('lb', idx_batch),
+                                                tf.reduce_join(tf.as_string(labels), separator=',')))
+            extra_eval_ops.append(tf.write_file(path_generator.gen('proba', idx_batch),
+                                                tf.reduce_join(tf.as_string(proba), separator=',')))
+            extra_eval_ops.append(tf.write_file(path_generator.gen('pred', idx_batch),
+                                                tf.reduce_join(tf.as_string(predictions), separator=',')))
 
         # Accuracy metric for summaries.
         metric_dict = {'Accuracy_%s' % FLAGS.dataset_name: slim.metrics.streaming_accuracy(predictions, labels)}
@@ -161,32 +184,8 @@ def main(_):
         for name, value in names_to_values.iteritems():
             tf.summary.scalar(name, value)
 
-        if FLAGS.image_summary:
-            true_comparison = tf.equal(predictions, labels)
-            positive_comparison = tf.equal(predictions, np.ones(predictions.get_shape()))
-
-            # tp
-            true_positives = tf.gather(images, tf.where(tf.logical_and(true_comparison, positive_comparison)), axis=0)
-            true_positives = tf.reshape(true_positives, [-1] + dataset_tools.IMAGE_SHAPE)
-            tf.summary.image('true_positives', true_positives, max_outputs=1000)
-            # tn
-            true_negatives = tf.gather(images, tf.where(tf.logical_and(true_comparison,
-                                                                       tf.logical_not(positive_comparison))), axis=0)
-            true_negatives = tf.reshape(true_negatives, [-1] + dataset_tools.IMAGE_SHAPE)
-            tf.summary.image('true_negatives', true_negatives, max_outputs=1000)
-
-            false_positives = tf.gather(images, tf.where(tf.logical_and(tf.logical_not(true_comparison),
-                                                                        positive_comparison)), axis=0)
-            false_positives = tf.reshape(false_positives, [-1] + dataset_tools.IMAGE_SHAPE)
-            tf.summary.image('false_positives', false_positives, max_outputs=1000)
-
-            false_negatives = tf.gather(images, tf.where(tf.logical_and(tf.logical_not(true_comparison),
-                                                                        tf.logical_not(positive_comparison))), axis=0)
-            false_negatives = tf.reshape(false_negatives, [-1] + dataset_tools.IMAGE_SHAPE)
-            tf.summary.image('false_negatives', false_negatives, max_outputs=1000)
-
         # Run the actual evaluation loop.
-        num_batches = math.ceil(len(test_labels) / float(FLAGS.eval_batch_size))
+        num_batches = math.ceil(num_examples / float(FLAGS.eval_batch_size))
         # num_batches = 1
 
         config = tf.ConfigProto()
